@@ -105,15 +105,42 @@
   .sig-block { text-align: center; }
   .sig-block select { width: 100%; padding: 7px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; margin-bottom: 8px; font-family: inherit; background: #fff; }
   .sig-line { border-bottom: 1px dashed #a8b5b1; height: 34px; }
-  .sig-block .sig-label { font-size: 11.5px; color: var(--text-light); margin: 7px 0 0; }
+  .sig-name-print { display: none; font-size: 13px; font-weight: 600; color: var(--text); margin: 6px 0 0; }
+  .sig-block .sig-label { font-size: 11.5px; color: var(--text-light); margin: 4px 0 0; }
 
   .btn-row { display: flex; gap: 10px; margin-top: 20px; }
   .btn { flex: 1; height: 44px; border: none; border-radius: 8px; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; }
   .btn-save { background: var(--navy); color: #fff; }
   .btn-save:hover { background: var(--navy-dark); }
   .btn-save:disabled { background: #9fb8b1; cursor: not-allowed; }
+  .btn-save.btn-editing { background: var(--orange); }
+  .btn-save.btn-editing:hover { background: #c4651f; }
   .btn-pdf { background: #fff; color: var(--navy); border: 1.5px solid var(--navy); }
   .btn-pdf:hover { background: #eef6f3; }
+
+  .edit-banner {
+    background: #fff4e8;
+    border: 1px solid var(--orange);
+    color: #a85a1f;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .edit-banner button {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--orange);
+    color: #a85a1f;
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .edit-banner button:hover { background: #fae3c8; }
 
   .status-msg { text-align: center; font-size: 13px; margin-top: 10px; min-height: 18px; }
   .status-msg.success { color: var(--navy); }
@@ -137,11 +164,16 @@
 
   @media print {
     .topbar, .tabs, .btn-row, .modal-actions { display: none !important; }
+    .editor-toolbar, #imageInput, .image-status { display: none !important; }
+    #contentEditor { border: none !important; padding: 0 !important; min-height: 0 !important; }
+    .sig-block select { display: none !important; }
+    .sig-name-print { display: block !important; }
     body { background: #fff; }
     .container { padding: 0; max-width: 100%; }
     .memo-card { border: none; padding: 0; }
     .modal-overlay { position: static; background: none; padding: 0; }
     .modal-box { max-height: none; box-shadow: none; }
+    @page { margin: 12mm; }
   }
 
   @media (max-width: 480px) {
@@ -166,6 +198,10 @@
 <div class="container">
 
   <div id="formView" class="view active">
+    <div class="edit-banner" id="editBanner" style="display:none;">
+      ✏️ กำลังแก้ไข Memo เดิม &nbsp;
+      <button type="button" onclick="cancelEdit()">ยกเลิกการแก้ไข</button>
+    </div>
     <div class="memo-card" id="printArea">
 
       <div class="memo-header">
@@ -220,7 +256,7 @@
 
       <div class="sig-row">
         <div class="sig-block">
-          <select id="recorderSelect">
+          <select id="recorderSelect" onchange="updateSigName('recorderSelect','recorderName')">
             <option value="">เลือกชื่อ...</option>
             <option value="อณินทิตา ปานบ้านแพ้ว">อณินทิตา ปานบ้านแพ้ว</option>
             <option value="เบญจวรรณ ทองบัว">เบญจวรรณ ทองบัว</option>
@@ -230,10 +266,11 @@
             <option value="คุณสุรพงษ์ หาญไกรวิไลย์">คุณสุรพงษ์ หาญไกรวิไลย์</option>
           </select>
           <div class="sig-line"></div>
+          <p class="sig-name-print" id="recorderName"></p>
           <p class="sig-label">ผู้บันทึกข้อมูล</p>
         </div>
         <div class="sig-block">
-          <select id="checkerSelect">
+          <select id="checkerSelect" onchange="updateSigName('checkerSelect','checkerName')">
             <option value="">เลือกชื่อ...</option>
             <option value="อณินทิตา ปานบ้านแพ้ว">อณินทิตา ปานบ้านแพ้ว</option>
             <option value="เบญจวรรณ ทองบัว">เบญจวรรณ ทองบัว</option>
@@ -243,10 +280,11 @@
             <option value="คุณสุรพงษ์ หาญไกรวิไลย์">คุณสุรพงษ์ หาญไกรวิไลย์</option>
           </select>
           <div class="sig-line"></div>
+          <p class="sig-name-print" id="checkerName"></p>
           <p class="sig-label">ผู้ตรวจสอบ</p>
         </div>
         <div class="sig-block">
-          <select id="approverSelect">
+          <select id="approverSelect" onchange="updateSigName('approverSelect','approverName')">
             <option value="">เลือกชื่อ...</option>
             <option value="อณินทิตา ปานบ้านแพ้ว">อณินทิตา ปานบ้านแพ้ว</option>
             <option value="เบญจวรรณ ทองบัว">เบญจวรรณ ทองบัว</option>
@@ -256,6 +294,7 @@
             <option value="คุณสุรพงษ์ หาญไกรวิไลย์">คุณสุรพงษ์ หาญไกรวิไลย์</option>
           </select>
           <div class="sig-line"></div>
+          <p class="sig-name-print" id="approverName"></p>
           <p class="sig-label">ผู้อนุมัติ</p>
         </div>
       </div>
@@ -283,6 +322,7 @@
 <div class="modal-overlay" id="detailModal">
   <div class="modal-box">
     <div class="modal-actions">
+      <button onclick="editMemo()" style="background: var(--navy); color: #fff;">แก้ไข</button>
       <button onclick="window.print()">พิมพ์ / PDF</button>
       <button onclick="closeModal()">ปิด</button>
     </div>
@@ -294,6 +334,8 @@
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxnfmVdKt_-yoatvPio32VfRn7PW3Ge77PrfJ2wfY6_vNwVhgHUFRTM1hvKkA5RC8h40w/exec";
 
   let allMemos = [];
+  let editingMemoId = null; // ถ้าไม่ใช่ null แปลว่ากำลังแก้ไข Memo เดิมอยู่ (ไม่ใช่บันทึกใหม่)
+  let currentDetailId = null; // id ของ Memo ที่เปิดดูใน modal อยู่ตอนนี้
 
   function switchTab(viewId, btn) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -301,6 +343,19 @@
     document.getElementById(viewId).classList.add('active');
     btn.classList.add('active');
     if (viewId === 'historyView') loadHistory();
+  }
+
+  // อัปเดตชื่อ text ที่จะแสดงตอนพิมพ์ ตามค่าที่เลือกใน Dropdown
+  function updateSigName(selectId, nameId) {
+    const select = document.getElementById(selectId);
+    const nameEl = document.getElementById(nameId);
+    nameEl.textContent = select.value || "";
+  }
+
+  function clearSigNames() {
+    ['recorderName', 'checkerName', 'approverName'].forEach(id => {
+      document.getElementById(id).textContent = "";
+    });
   }
 
   function fmt(command, value) {
@@ -455,19 +510,23 @@
     }
 
     saveBtn.disabled = true;
-    saveBtn.textContent = "กำลังบันทึก...";
+    saveBtn.textContent = editingMemoId ? "กำลังบันทึกการแก้ไข..." : "กำลังบันทึก...";
     statusEl.textContent = "";
 
     try {
+      const payload = { subject: subject, to: to, content: content, recorder: recorder, checker: checker, approver: approver };
+      if (editingMemoId) payload.id = editingMemoId;
+
       const res = await fetch(SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ subject: subject, to: to, content: content, recorder: recorder, checker: checker, approver: approver })
+        body: JSON.stringify(payload)
       });
       const result = await res.json();
 
       if (result.success) {
-        statusEl.textContent = "บันทึกสำเร็จ เลขที่เอกสาร " + result.memo.memoNo;
+        const wasEditing = !!editingMemoId;
+        statusEl.textContent = (wasEditing ? "บันทึกการแก้ไขสำเร็จ เลขที่เอกสาร " : "บันทึกสำเร็จ เลขที่เอกสาร ") + result.memo.memoNo;
         statusEl.className = "status-msg success";
         document.getElementById('docNoDisplay').textContent = result.memo.memoNo;
         document.getElementById('subjectInput').value = "";
@@ -476,7 +535,12 @@
         document.getElementById('recorderSelect').value = "";
         document.getElementById('checkerSelect').value = "";
         document.getElementById('approverSelect').value = "";
-        loadNextNumber();
+        clearSigNames();
+        editingMemoId = null;
+        saveBtn.classList.remove('btn-editing');
+        document.getElementById('editBanner').style.display = "none";
+        if (!wasEditing) loadNextNumber();
+        else loadNextNumber();
       } else {
         throw new Error(result.error || "บันทึกไม่สำเร็จ");
       }
@@ -485,7 +549,7 @@
       statusEl.className = "status-msg error";
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = "บันทึกข้อมูล";
+      saveBtn.textContent = editingMemoId ? "บันทึกการแก้ไข" : "บันทึกข้อมูล";
     }
   }
 
@@ -539,6 +603,7 @@
   function openDetail(id) {
     const memo = allMemos.find(function(m) { return m.id === id; });
     if (!memo) return;
+    currentDetailId = id;
 
     const modalContent = document.getElementById('modalContent');
     modalContent.innerHTML =
@@ -568,6 +633,54 @@
 
   function closeModal() {
     document.getElementById('detailModal').classList.remove('active');
+  }
+
+  // ดึงข้อมูล Memo ที่กำลังดูอยู่ มาเติมในฟอร์มหลักเพื่อแก้ไข
+  function editMemo() {
+    // หา memo จาก id ที่ผูกไว้กับปุ่ม (เก็บไว้ตอนเปิด modal)
+    const memo = allMemos.find(function(m) { return m.id === currentDetailId; });
+    if (!memo) return;
+
+    editingMemoId = memo.id;
+
+    document.getElementById('subjectInput').value = memo.subject || "";
+    document.getElementById('toInput').value = memo.to || "";
+    document.getElementById('contentEditor').innerHTML = memo.content || "";
+    document.getElementById('recorderSelect').value = memo.recorder || "";
+    document.getElementById('checkerSelect').value = memo.checker || "";
+    document.getElementById('approverSelect').value = memo.approver || "";
+    updateSigName('recorderSelect', 'recorderName');
+    updateSigName('checkerSelect', 'checkerName');
+    updateSigName('approverSelect', 'approverName');
+
+    document.getElementById('docNoDisplay').textContent = memo.memoNo;
+
+    // เปลี่ยนปุ่มบันทึกเป็นโหมดแก้ไข
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.textContent = "บันทึกการแก้ไข";
+    saveBtn.classList.add('btn-editing');
+    document.getElementById('editBanner').style.display = "flex";
+
+    closeModal();
+    document.querySelector('.tab-btn[data-view="formView"]').click();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ยกเลิกโหมดแก้ไข กลับเป็นบันทึกใหม่ตามปกติ
+  function cancelEdit() {
+    editingMemoId = null;
+    document.getElementById('subjectInput').value = "";
+    document.getElementById('toInput').value = "";
+    document.getElementById('contentEditor').innerHTML = "";
+    document.getElementById('recorderSelect').value = "";
+    document.getElementById('checkerSelect').value = "";
+    document.getElementById('approverSelect').value = "";
+    clearSigNames();
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.textContent = "บันทึกข้อมูล";
+    saveBtn.classList.remove('btn-editing');
+    document.getElementById('editBanner').style.display = "none";
+    loadNextNumber();
   }
 
   loadNextNumber();
