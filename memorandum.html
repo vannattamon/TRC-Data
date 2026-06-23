@@ -96,6 +96,10 @@
   #contentEditor:focus { outline: none; border-color: var(--navy); }
   #contentEditor table { border-collapse: collapse; width: 100%; margin: 8px 0; }
   #contentEditor table td, #contentEditor table th { border: 1px solid #b9c4c0; padding: 6px 8px; }
+  #contentEditor img.memo-img { max-width: 100%; border-radius: 6px; margin: 6px 0; display: block; }
+  .image-status { font-size: 12px; color: var(--text-light); margin: 6px 2px 0; min-height: 16px; }
+  .image-status.uploading { color: var(--navy); }
+  .image-status.error { color: #c0392b; }
 
   .sig-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
   .sig-block { text-align: center; }
@@ -206,8 +210,12 @@
           <div class="divider"></div>
           <button type="button" onclick="insertTable()" title="แทรกตาราง">⊞ ตาราง</button>
           <button type="button" onclick="fmt('insertUnorderedList')" title="รายการ">&bull; รายการ</button>
+          <div class="divider"></div>
+          <button type="button" onclick="document.getElementById('imageInput').click()" title="แนบรูปภาพ">📷 แนบรูป</button>
+          <input type="file" id="imageInput" accept="image/*" multiple style="display:none" onchange="handleImageSelect(event)">
         </div>
         <div id="contentEditor" contenteditable="true" placeholder="พิมพ์รายละเอียดที่ต้องการแจ้ง..."></div>
+        <p class="image-status" id="imageStatus"></p>
       </div>
 
       <div class="sig-row">
@@ -317,6 +325,102 @@
     document.execCommand('insertHTML', false, html);
   }
 
+  // ---------- Image attach: select, resize/compress, insert ----------
+  const MAX_IMAGE_DIMENSION = 900;   // px ด้านยาวสุดหลัง resize
+  const JPEG_QUALITY = 0.6;          // คุณภาพบีบอัด (0-1)
+  const MAX_BASE64_CHARS_PER_IMAGE = 45000; // เพดานความปลอดภัยต่อรูป (เผื่อ cell limit ของ Sheets)
+
+  function handleImageSelect(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    processImageQueue(files);
+    event.target.value = ""; // เคลียร์ให้เลือกไฟล์ซ้ำได้อีกครั้ง
+  }
+
+  async function processImageQueue(files) {
+    const statusEl = document.getElementById('imageStatus');
+    let done = 0;
+
+    for (const file of files) {
+      done++;
+      statusEl.textContent = `กำลังประมวลผลรูปภาพ ${done}/${files.length}...`;
+      statusEl.className = "image-status uploading";
+      try {
+        const dataUrl = await resizeAndCompressImage(file);
+        insertImageAtCursor(dataUrl);
+      } catch (err) {
+        statusEl.textContent = `ไม่สามารถแนบรูป "${file.name}" ได้: ${err.message}`;
+        statusEl.className = "image-status error";
+        continue;
+      }
+    }
+
+    if (statusEl.className !== "image-status error") {
+      statusEl.textContent = `แนบรูปสำเร็จ ${files.length} รูป`;
+      statusEl.className = "image-status";
+      setTimeout(() => { statusEl.textContent = ""; }, 3000);
+    }
+  }
+
+  function resizeAndCompressImage(file) {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        reject(new Error("ไม่ใช่ไฟล์รูปภาพ"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("เปิดรูปไม่สำเร็จ"));
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+            if (width > height) {
+              height = Math.round(height * (MAX_IMAGE_DIMENSION / width));
+              width = MAX_IMAGE_DIMENSION;
+            } else {
+              width = Math.round(width * (MAX_IMAGE_DIMENSION / height));
+              height = MAX_IMAGE_DIMENSION;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // ลดคุณภาพลงเรื่อยๆ จนกว่าจะผ่านเพดานขนาด
+          let quality = JPEG_QUALITY;
+          let dataUrl = canvas.toDataURL('image/jpeg', quality);
+          let attempts = 0;
+          while (dataUrl.length > MAX_BASE64_CHARS_PER_IMAGE && quality > 0.15 && attempts < 6) {
+            quality -= 0.1;
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+            attempts++;
+          }
+
+          if (dataUrl.length > MAX_BASE64_CHARS_PER_IMAGE) {
+            reject(new Error("รูปมีขนาดใหญ่เกินไปหลังบีบอัด ลองใช้รูปอื่น"));
+            return;
+          }
+
+          resolve(dataUrl);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function insertImageAtCursor(dataUrl) {
+    const editor = document.getElementById('contentEditor');
+    editor.focus();
+    const imgHtml = `<img class="memo-img" src="${dataUrl}"><br>`;
+    document.execCommand('insertHTML', false, imgHtml);
+  }
+
   async function loadNextNumber() {
     try {
       const res = await fetch(SCRIPT_URL + "?action=nextNumber");
@@ -340,6 +444,12 @@
 
     if (!subject || !content || !recorder) {
       statusEl.textContent = "กรุณากรอกเรื่อง, รายละเอียด, และเลือกผู้บันทึกข้อมูล";
+      statusEl.className = "status-msg error";
+      return;
+    }
+
+    if (content.length > 48000) {
+      statusEl.textContent = "เนื้อหารวมรูปภาพมีขนาดใหญ่เกินไป กรุณาลดจำนวนรูปภาพหรือลดความยาวข้อความ";
       statusEl.className = "status-msg error";
       return;
     }
