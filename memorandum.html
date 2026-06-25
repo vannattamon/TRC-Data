@@ -688,3 +688,43 @@
 
 </body>
 </html>
+// =========================================
+// อัปโหลดรูปภาพไป Google Drive (แก้ปัญหา URL ยาวเกิน)
+// =========================================
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    if (data.action === 'uploadImage') {
+      const url = saveImageToDrive(data.imageBase64, data.fileName);
+      return jsonResponse({ success: true, url: url });
+    }
+    return jsonResponse({ success: false, error: 'unknown action' });
+  } catch (err) {
+    return jsonResponse({ success: false, error: err.toString() });
+  }
+}
+
+function saveImageToDrive(base64Data, fileName) {
+  const matches = base64Data.match(/^data:(.+);base64,(.+)$/);
+  let mimeType = 'image/png';
+  let pureBase64 = base64Data;
+  if (matches) {
+    mimeType = matches[1];
+    pureBase64 = matches[2];
+  }
+  const bytes = Utilities.base64Decode(pureBase64);
+  const blob = Utilities.newBlob(bytes, mimeType, fileName || ('memo_image_' + new Date().getTime()));
+
+  const folderName = 'TRC_Memorandum_Images';
+  let folder;
+  const folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    folder = folders.next();
+  } else {
+    folder = DriveApp.createFolder(folderName);
+  }
+
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return file.getUrl();
+}
